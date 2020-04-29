@@ -28,14 +28,25 @@ java-sdk-common\java_sdk\arp-sdk\tn_dependencies.gradle：
     navkitCompile(libraries.navKit) {
         transitive = false //Transitive用于自动处理子依赖项。默认为true，gradle自动添加子依赖项，形成一个多层树形结构；设置为false，则需要手动添加每个依赖项。
     }
-	
-	
-flavor配置不同包名
+
+--------------------
+flavor旨在创建不同的产品风味(app或者仅仅是个lib 包都可以)，并为不同产品分配专有属性
+flavor在配置不同产品时，productFlavors 设置的不同环境包名会覆盖 defaultConfig 里面的设置的包名。
+flavorDimensions "SDK" //用flavorDimensions属性来创建一个“模式”风味维度，维度来区分不同的类型，比如这里是“SDK”，还有“dev”“app”等
 productFlavors {
 	navkit {
 		dimension "SDK"
 	}
 }
+
+此外，还可以设置不同的产品引入不同的包
+使用方式：产品名Compile “xxx.xxx.xx”
+//不同产品引入不同的包
+navkitCompile fileTree(include: ['*.jar', '*.aar'], dir: 'navkitLibs') //将libs目录下所有jar文件进行编译并打包
+
+ACompile "com.android.support:appcompat-v7:26.+"
+BCompile "com.android.support.constraint:constraint-layout:1.0.2"
+
 
 
 Gradle Plugin的作用：
