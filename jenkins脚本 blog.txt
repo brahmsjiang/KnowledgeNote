@@ -1,0 +1,52 @@
+#!/usr/bin/env groovy
+用Groovy编写Unix脚本并且像Unix脚本一样直接从命令行运行它.
+
+def pipeline = new Pipeline()
+Groovy变量作用域有两个，要想成为全局作用域，需要用@Field标示
+
+withEnv(['PROJECT_HOME=Navkit']) {}
+不建议使用env来修改全局的环境变量，这样后面的groovy脚本也将被影响。一般使用withEnv来修改环境变量，变量的修改只在withEnv的块内起作用。
+
+node('qnx_release') {}
+关键字node就是用来区分，Jenkins环境中不同的节点环境。例如一个Jenkins环境包括master节点，也就是主节点，还包括N多个从节点，这些从节点在添加到主节点的向导页面中有一个参数，好像是label，就是给这个从节点取一个名称。在Pipeline代码中可以通过node这个关键字告诉Jenkins去用哪一台节点机器去执行代码。
+
+stage('start') {}
+stage，就是一段代码块，一般个stage包含一个业务场景的自动化，例如build是一个stage, test是第二个stage，deploy是第三个stage。通过stage隔离，让Pipeline代码读写非常直观。到后面你还会学习stages这个关键字，一个stages包含多个stage。
+
+try {}
+catch (exc) {
+	throw
+}
+异常处理机制。当任何一个步骤因各种原因而出现异常时，都必须在Groovy中使用try/catch/finally语句块进行处理
+
+
+checkout scm: [
+	$class: 'GitSCM',
+	branches: scm.branches,
+	doGenerateSubmoduleConfigurations: false,
+	extensions: [[$class: 'SubmoduleOption',
+				  disableSubmodules: false,
+				  parentCredentials: true,
+				  recursiveSubmodules: true,
+				  reference: '',
+				  trackingSubmodules: false]],
+	submoduleCfg: [],
+	userRemoteConfigs: scm.userRemoteConfigs
+]
+pipeline常用插件语句checkout SCM用来下载git仓代码，还可以支持cherry pick 某个patch
+
+def jiraOutput = "${pwd}/release/output/${jiraOutputName}"
+Groovy 提供了def关键字供使用，它可以省略变量类型的定义，根据变量的值进行类型推导。
+
+env
+Jenkins内置环境变量,参考https://www.cnblogs.com/puresoul/p/4828913.html
+
+stage('build') {
+	parallel(jobs)
+}
+Stage 级别的并行执行，此外还有step级别的并行执行。
+	
+ws("workspace/${jobname}/${platform}") {}
+workspace: 每个job执行的时候都会有一个文件夹与之关联: workspace. 这个workspace不一定是新建的. job中的读写文件都发生在这个workspace中. 有一个step: ws. 可以用于在已经执行的job中, 在另一个workspace中执行一段代码. dir可以用于在一个不同于当前workspace的目录下执行一段代码, 通常是当前workspace的一个子目录.
+
+

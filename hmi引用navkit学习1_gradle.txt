@@ -1,0 +1,43 @@
+项目中一般会出现2个/多个build.gradle 文件，一个在根目录下，一个在app 目录下。
+ 根目录下的 build.gradle
+　　1） repositories 闭包，声明了 jcenter() 的配置；
+　　2） dependencies 闭包，声明了一个 Gradle 插件。
+
+ 
+利用apply from: 'xx.gradle'这样的语句，就可以引入其他gradle文件了
+
+可以在ext属性的map中放字符串或者基本数据类型
+java-sdk-common\java_sdk\dependencies_warehouse.gradle
+ext.versions = [
+        navKit             : '2.94.625345',
+		...
+]
+		
+ext.libraries = [
+        navKit                 : "telenav:NavKit:${versions.navKit}",
+		...
+]
+
+java-sdk-common\java_sdk\build.gradle
+apply from: 'dependencies_warehouse.gradle'
+
+java-sdk-common\java_sdk\arp-sdk
+apply from: 'tn_dependencies.gradle'
+
+java-sdk-common\java_sdk\arp-sdk\tn_dependencies.gradle：
+    navkitCompile(libraries.navKit) {
+        transitive = false //Transitive用于自动处理子依赖项。默认为true，gradle自动添加子依赖项，形成一个多层树形结构；设置为false，则需要手动添加每个依赖项。
+    }
+	
+	
+flavor配置不同包名
+productFlavors {
+	navkit {
+		dimension "SDK"
+	}
+}
+
+
+Gradle Plugin的作用：
+模块化构建脚本的功能
+公共的功能可以抽取出来成为插件，可以供多个 build.gradle 使用，增加复用性
