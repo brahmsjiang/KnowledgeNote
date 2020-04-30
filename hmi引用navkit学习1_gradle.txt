@@ -9,12 +9,12 @@
 可以在ext属性的map中放字符串或者基本数据类型
 java-sdk-common\java_sdk\dependencies_warehouse.gradle
 ext.versions = [
-        navKit             : '2.94.625345',
+        navKit: '2.94.625345',
 		...
 ]
 		
 ext.libraries = [
-        navKit                 : "telenav:NavKit:${versions.navKit}",
+        navKit: "telenav:NavKit:${versions.navKit}",  //结果 telenav:NavKit:2.94.625345
 		...
 ]
 
@@ -23,11 +23,6 @@ apply from: 'dependencies_warehouse.gradle'
 
 java-sdk-common\java_sdk\arp-sdk
 apply from: 'tn_dependencies.gradle'
-
-java-sdk-common\java_sdk\arp-sdk\tn_dependencies.gradle：
-    navkitCompile(libraries.navKit) {
-        transitive = false //Transitive用于自动处理子依赖项。默认为true，gradle自动添加子依赖项，形成一个多层树形结构；设置为false，则需要手动添加每个依赖项。
-    }
 
 --------------------
 flavor旨在创建不同的产品风味(app或者仅仅是个lib 包都可以)，并为不同产品分配专有属性
@@ -41,13 +36,31 @@ productFlavors {
 
 此外，还可以设置不同的产品引入不同的包
 使用方式：产品名Compile “xxx.xxx.xx”
-//不同产品引入不同的包
+dependencies对于Android开发人员来说，并不陌生， 它是用来配置当项目的依赖项，接收的是一个DependencyHandler的闭包。
+
+其中使用闭包XXXcompile
+使用compile方式依赖的库将会参与编译和打包
+从依赖上讲，用compile修饰的配置会传递依赖，而大多数的依赖冲突都是由compile产生的，什么是传递依赖？
+打个比方：我们现在有libA，然后libB用compile依赖libA，最后libC依赖libB。那这个时候，libC自然能够使用libA的内容，因为libA的内容跟随这个libB而传递到了libC中。
+
+或者用implementation
+implementation 是Gradle4.1(Android studio3.0)新增的依赖方式，implementation和compile不同，该依赖方式不会产生传递依赖，implementation有点像provided和、debugCompile和releaseCompile的集合体。
+来个具体场景，例如：有libA公共库，libB通过implementation依赖libB，然后app无论通过什么方式依赖libB，lib1的依赖都不会传递过来，必须要在app中重新依赖一次。
+
+java-sdk-common\java_sdk\arp-sdk\tn_dependencies.gradle：
 navkitCompile fileTree(include: ['*.jar', '*.aar'], dir: 'navkitLibs') //将libs目录下所有jar文件进行编译并打包
 
-ACompile "com.android.support:appcompat-v7:26.+"
-BCompile "com.android.support.constraint:constraint-layout:1.0.2"
+navkitCompile(libraries.hybridSearch) {
+	exclude(group: 'com.github.davidmoten', module: 'geo') //导入第三方库时，如该库本身也导入了和我们主工程一样的库，就会报错，因此要排除重复的库
+}
+		
+navkitCompile(libraries.navKit) {
+	transitive = false
+}
 
-
+navkitCompile(libraries.mapEngine) {
+	transitive = false//Transitive用于自动处理子依赖项。默认为true，gradle自动添加子依赖项，形成一个多层树形结构；设置为false，则需要手动添加每个依赖项。
+}
 
 Gradle Plugin的作用：
 模块化构建脚本的功能

@@ -1,0 +1,11 @@
+navkit侧：
+.java
+用javac等工具将java编译成字节码===>
+.class
+打包成jar包===>
+.jar
+
+build.py
+component.artifacts.append( FileArtifact( "android/build/dist/AutoSDK.jar", "lib/java/AutoSDK-android.jar" ) )
+
+build.xml
