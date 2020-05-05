@@ -8,4 +8,32 @@ navkit侧：
 build.py
 component.artifacts.append( FileArtifact( "android/build/dist/AutoSDK.jar", "lib/java/AutoSDK-android.jar" ) )
 
+artifact.py
+class Artifact(object):
+   def __init__( artifact, platform = None, optional = False ):
+      artifact.platform = platform
+      artifact.optional = optional
+	  
+class FileArtifact(Artifact):
+   def __init__( artifact, sourcePath, destinationPath = None, platform = None, optional = False ):
+      super(FileArtifact,artifact).__init__(platform=platform,optional=optional)
+	  
+
+所以Python类都隐含了一个超类：object
+__init__()
+一种特殊的方法，被称为类的构造函数或初始化方法，当创建了这个类的实例时就会调用该方法
+第一个参数必是self(也可以用别的名字)
+
+super() 函数是用于调用父类(超类)的一个方法,用来解决多重继承问题的，直接用类名调用父类方法在使用单继承的时候没问题，但是如果使用多继承，会涉及到查找顺序（MRO）、重复调用（钻石继承）等种种问题。
+MRO 就是类的方法解析顺序表, 其实也就是继承父类方法时的顺序表。
+
+语法
+super(type[, object-or-type])
+参数
+type -- 类。
+object-or-type -- 类，一般是 self
+Python3.x 和 Python2.x 的一个区别是: Python 3 可以使用直接使用 super().xxx 代替 super(Class, self).xxx :
+
+
+
 build.xml
