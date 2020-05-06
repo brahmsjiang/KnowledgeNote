@@ -13,31 +13,36 @@ navkit侧：
     }
 	
 -将上述java文件编译成.class（字节码）文件
-ndkbuild结合
---------
-build.properties
-dist.home=${basedir}/build/dist ##即为android/build/dist
-java.src.home=${basedir}/main/java/src ##即为android/main/java/src 
-java.classes.home=${basedir}/build/classes
-service.name=AutoSDK
-并使用
---------
-build.xml
-	<target name="compile.service" description="Compile all source code">
-		<javac destdir="${java.classes.home}" debug="true" deprecation="false" optimize="true" includeantruntime="false" target="1.5" source="1.5">
-			<src path="${java.src.home}" />
-			<classpath refid="root.classpath" />
-		</javac>
-	</target>
+	用ndkbuild工具结合build.properties：
+	dist.home=${basedir}/build/dist ##即为android/build/dist
+	java.src.home=${basedir}/main/java/src ##即为android/main/java/src 
+	java.classes.home=${basedir}/build/classes
+	service.name=AutoSDK
+	并读取build.xml：
+		<target name="compile.service" description="Compile all source code">
+			<javac destdir="${java.classes.home}" debug="true" deprecation="false" optimize="true" includeantruntime="false" target="1.5" source="1.5">
+				<src path="${java.src.home}" />
+				<classpath refid="root.classpath" />
+			</javac>
+		</target>
 	
 -将class打包成jar包供HMI/javasdk使用
-同上结合build.properties使用build.xml
-	<target name="create.jar">
-		<echo message="Creating service jar - ${service.name}.jar" />
-		<jar destfile="${dist.home}/${service.name}.jar" basedir="${java.classes.home}" excludes="**/com/telenav/proto/common/**,**/com/telenav/proto/services/**"/>
-	</target>
-	给HMI目标文件如java_sdk\arp-sdk\navkitLibs\AutoSDK-android.jar
-
+	同上结合build.properties使用build.xml：
+		<target name="create.jar">
+			<echo message="Creating service jar - ${service.name}.jar" />
+			<jar destfile="${dist.home}/${service.name}.jar" basedir="${java.classes.home}" excludes="**/com/telenav/proto/common/**,**/com/telenav/proto/services/**"/>
+		</target>
+	又被build.py归档重命名：
+		component.artifacts.append( FileArtifact( "android/build/dist/AutoSDK.jar", "lib/java/AutoSDK-android.jar" ) )
+		
+HMI侧：
+-目标文件如：java_sdk\arp-sdk\navkitLibs\AutoSDK-android.jar
+-要使用的java文件导入包
+	import com.telenav.arp.sdk.jni.AutoSdkNavigationServiceJNI;
+-使用
+	final int status = AutoSdkNavigationServiceJNI.getInstance().initService(autoSdkServiceCallback, builder.build().toByteArray());
+	
+	
 ========================================================================================
 build.py
 component.artifacts.append( FileArtifact( "android/build/dist/AutoSDK.jar", "lib/java/AutoSDK-android.jar" ) )
