@@ -1,10 +1,44 @@
 navkit侧：
-.java
-用javac等工具将java编译成字节码===>
-.class
-打包成jar包===>
-.jar
+-编写bindings\android\main\java\src\com\telenav下面相应的java调用类，如AutoSdkNavigationServiceJNI.java
+	public native int initService(AutoSdkNavigationServiceCallback listener, final byte[] sdkInitializationInfo);
+	
+-用javah生成c/c++原生函数的头文件，或手动编写（这里把所有原生函数声明放在AutoSdkJni.h中）
+    DENALI_EXTERN_API jint JNICALL Java_com_telenav_arp_sdk_jni_AutoSdkNavigationServiceJNI_initService(JNIEnv* env, jobject obj, jobject callbackListener, const jbyteArray sdkInitializationInfo);
+	
+-在c/c++中实现原生函数(原则上可以调用任何资源)，并生成相应的原生库（dll等）
+-将项目依赖的所有原生库或资源加入到java项目的java.library.path所指路径中，这样可供需要该库的文件中加入
+	如在AutoSdkNavigationServiceJNI.java中：
+	static {
+        System.loadLibrary("AutoSDKJNI");
+    }
+	
+-将上述java文件编译成.class（字节码）文件
+ndkbuild结合
+--------
+build.properties
+dist.home=${basedir}/build/dist ##即为android/build/dist
+java.src.home=${basedir}/main/java/src ##即为android/main/java/src 
+java.classes.home=${basedir}/build/classes
+service.name=AutoSDK
+并使用
+--------
+build.xml
+	<target name="compile.service" description="Compile all source code">
+		<javac destdir="${java.classes.home}" debug="true" deprecation="false" optimize="true" includeantruntime="false" target="1.5" source="1.5">
+			<src path="${java.src.home}" />
+			<classpath refid="root.classpath" />
+		</javac>
+	</target>
+	
+-将class打包成jar包供HMI/javasdk使用
+同上结合build.properties使用build.xml
+	<target name="create.jar">
+		<echo message="Creating service jar - ${service.name}.jar" />
+		<jar destfile="${dist.home}/${service.name}.jar" basedir="${java.classes.home}" excludes="**/com/telenav/proto/common/**,**/com/telenav/proto/services/**"/>
+	</target>
+	给HMI目标文件如java_sdk\arp-sdk\navkitLibs\AutoSDK-android.jar
 
+========================================================================================
 build.py
 component.artifacts.append( FileArtifact( "android/build/dist/AutoSDK.jar", "lib/java/AutoSDK-android.jar" ) )
 
@@ -17,7 +51,11 @@ class Artifact(object):
 class FileArtifact(Artifact):
    def __init__( artifact, sourcePath, destinationPath = None, platform = None, optional = False ):
       super(FileArtifact,artifact).__init__(platform=platform,optional=optional)
+	  artifact.sourcePath = sourcePath
+      artifact.destinationPath = destinationPath if destinationPath else sourcePath
 	  
+__str__方法需要返回一个字符串，作为这个对象的描述
+使用print输出对象的时候，只要自己定义了__str__(self)方法，那么就会打印从在这个方法中return的数据
 
 所以Python类都隐含了一个超类：object
 __init__()
@@ -30,10 +68,6 @@ MRO 就是类的方法解析顺序表, 其实也就是继承父类方法时的�
 语法
 super(type[, object-or-type])
 参数
-type -- 类。
-object-or-type -- 类，一般是 self
+type --类
+object-or-type --类，一般是self
 Python3.x 和 Python2.x 的一个区别是: Python 3 可以使用直接使用 super().xxx 代替 super(Class, self).xxx :
-
-
-
-build.xml
