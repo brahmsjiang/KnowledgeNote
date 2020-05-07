@@ -30,7 +30,7 @@ com\telenav\proto\auto_sdk\AutoSdkCommon.java
 	  }
 
 =====================================================================
-hmi实现：
+javasdk实现：
 java_sdk\arp-sdk\src\hna\java\com\telenav\arp\sdk\AutoSdkManager.java
 public final class AutoSdkManager {
 	private void initAutoSdkListener() {
@@ -60,12 +60,111 @@ import com.telenav.proto.auto_sdk.AutoSdkCommon; //导入navkit提供的AutoSDK-
                                 break;
                             }
 
-通知voiceguidance事件
+通知voiceguidance事件(java文件同上)
+import com.telenav.arp.sdk.vo.navigation.VoiceGuidance;
+
+public class AutoSdkServiceCallbackImpl implements AutoSdkNavigationServiceCallback {
+    private void notifyVoiceGuidance(AutoSdkServiceNavigation.AudioGuidance audioGuidance) {
+        final VoiceGuidance guidance = ProtoBuf2VOHelper.convert(audioGuidance);
+        for (AutoSdkNavigationService.NavigationVoiceGuidanceListener listener
+                : AutoSdkNavigationService.getInstance().getNavigationVoiceGuidanceListeners()) {
+            try {
+                listener.notifyVoiceGuidance(guidance);
+            }
+		}
+	}
+}	
+
+java_sdk\arp-sdk\src\main\java\com\telenav\arp\sdk\navigation\AutoSdkNavigationService.java
+import java.util.concurrent.CopyOnWriteArraySet;
+public abstract class AutoSdkNavigationService implements NavigationService.RefreshStartPoint {
+	private Collection<NavigationVoiceGuidanceListener> navigationVoiceGuidanceListeners = new CopyOnWriteArraySet<>();
+    Collection<NavigationVoiceGuidanceListener> getNavigationVoiceGuidanceListeners() {
+        return this.navigationVoiceGuidanceListeners;	//返回的是整个collection
+    }
+
+java_sdk\arp-sdk\src\navkit\java\com\telenav\arp\sdk\navigation\AutoSdkNavigationServiceNavkitImpl.java
+public final class AutoSdkNavigationServiceNavkitImpl extends AutoSdkNavigationService {
+    public AutoSdkNavigationServiceNavkitImpl() {
+        setImpl(this);
+        this.addMapMatchingLocationListener(AutoSdkNavigationServiceWrapper.INSTANCE);
+        this.addNavigationStatusListener(AutoSdkNavigationServiceWrapper.INSTANCE);
+        this.addNavigationVoiceGuidanceListener(AutoSdkNavigationServiceWrapper.INSTANCE);	//往navigationVoiceGuidanceListeners里面添加listener元素
+    }
+}
+
+java_sdk\arp-sdk\src\navkit\java\com\telenav\arp\sdk\navigation\AutoSdkNavigationServiceWrapper.java	//包装器
+final class AutoSdkNavigationServiceWrapper implements AutoSdkNavigationService.MapMatchingLocationListener,
+        AutoSdkNavigationService.NavigationStatusListener,
+        AutoSdkNavigationService.NavigationVoiceGuidanceListener {
+    final static AutoSdkNavigationServiceWrapper INSTANCE = new AutoSdkNavigationServiceWrapper();	//AutoSdkNavigationServiceWrapper的INSTANCE，是个静态成员
+	
+    @ThreadSafe
+    private static class VoiceGuidanceUtil {
+        private VoiceGuidancePlaybackStrategy voiceGuidancePlaybackStrategy;
+		private TextToSpeechPlayer textToSpeechPlayer;
+	}
+	
+    void installVoiceGuidancePlaybackStrategy(VoiceGuidancePlaybackStrategy strategy, TextToSpeechPlayer player) {	//在hmi侧使用该方法安装XX播放策略
+        synchronized (this.voiceGuidanceUtil) {
+            this.voiceGuidanceUtil.setVoiceGuidancePlaybackStrategy(strategy);	//设置内部工具类VoiceGuidanceUtil的成员strategy和player
+            this.voiceGuidanceUtil.setTextToSpeechPlayer(player);
+        }
+    }
+	
+	@Override
+    public void notifyVoiceGuidance(VoiceGuidance guidance) {	//通知voiceguidance事件最终使用的是这里的函数 notifyVoiceGuidance
+        if (guidance != null) {
+            VoiceGuidancePlaybackStrategy strategy;
+            TextToSpeechPlayer player;
+            synchronized (this.voiceGuidanceUtil) {
+                strategy = this.voiceGuidanceUtil.getVoiceGuidancePlaybackStrategy();	//获取内部类的strategy成员
+                player = this.voiceGuidanceUtil.getTextToSpeechPlayer();
+            }
+            if (player != null && strategy != null) {
+                strategy.navigationVoiceGuidance(player, guidance, !this.isVoiceGuidanceNotificationEnabled());	//最终调用
+            }
+        }
+    }
+
+}
 							
-							
-							
-							
-							
-							
-							
-							
+进行相关播放事宜：
+java_sdk\arp-sdk\src\main\java\com\telenav\arp\sdk\navigation\VoiceGuidancePlaybackStrategy.java
+public interface VoiceGuidancePlaybackStrategy {
+}
+
+java_sdk\arp-sdk\src\main\java\com\telenav\arp\sdk\navigation\DefaultVoiceGuidancePlaybackStrategy.java
+public class DefaultVoiceGuidancePlaybackStrategy implements VoiceGuidancePlaybackStrategy {
+    @Override
+    public void navigationVoiceGuidancenavigationVoiceGuidance(TextToSpeechPlayer player, VoiceGuidance voiceGuidance, boolean hintMuted) {	//上述最终调用的是该函数！！！！
+        if (this.filterNavigationVoiceGuidance(voiceGuidance, hintMuted)) {
+            final boolean interruptPreviousAudio = (voiceGuidance.getPromptType() == VoiceGuidance.GuidancePromptType.RepeatNavigationGuidance);
+            final Bundle params = new Bundle();
+
+            if (voiceGuidance.getGuidanceTexts() != null) {
+                boolean firstAudio = true;
+                for (final String text : voiceGuidance.getGuidanceTexts()) {
+                    if (firstAudio && interruptPreviousAudio) {
+                        final Bundle paramFirstAudio = new Bundle(params);
+                        paramFirstAudio.putBoolean(TextToSpeechPlayer.INTERRUPT_AUDIO, true);
+                        player.synthesizeText(text, paramFirstAudio);
+                        firstAudio = false;
+                    } else {
+                        player.synthesizeText(text, params);
+                    }
+                }
+            }
+        }
+	}
+}
+
+java_sdk\android-common\src\main\java\com\telenav\arp\tts\DenaliVoiceGuidancePlaybackStrategy.java
+public class DenaliVoiceGuidancePlaybackStrategy extends DefaultVoiceGuidancePlaybackStrategy {
+
+=====================================================================
+hmi实现：
+NavHome\module\mainshared\src\main\java\com\telenav\arp\app\BaseApplication.java
+AutoSdkNavigationService.getInstance().installVoiceGuidancePlaybackStrategy(new DenaliVoiceGuidancePlaybackStrategy(), getTTSPlayer());
+
+

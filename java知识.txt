@@ -13,6 +13,8 @@ public void oncreate(Bundle savedInstanceState)
 编译器会报如下错误：The method oncreate(Bundle) of type HelloWorld must override or implement a supertype method，以确保你正确重写onCreate方法（因为oncreate应该为onCreate）。
 而如果你不加@Override，则编译器将不会检测出错误，而是会认为你为子类定义了一个新方法：oncreate
 
+@ThreadSafe是表示这个类是线程安全的。
+具体是否真安全，那要看实现者怎么实现的了，反正打上这个标签只是表示一下。不线程安全的类打上这个注解也没事儿。
 
 java中import导入的是*.class文件，但如果放入对应的*.java文件，也一样可以运行。因为在导入时会用*.java文件生成*.class文件。 
 
@@ -33,3 +35,38 @@ public class xxxx implements Runnable {
 
 Collection<NavigationVoiceGuidanceListener>
 Collection来源于Java.util包，非常实用的数据结构。就是容器
+
+抽象类：
+public abstract class AutoSdkNavigationService implements NavigationService.RefreshStartPoint {}
+public final class AutoSdkNavigationServiceNavkitImpl extends AutoSdkNavigationService {}//被子类继承后可以使用
+
+接口和抽象类的异同是什么？
+相同点：
+1、都不能被实例化。
+2、接口的实现类和抽象类的子类只有全部实现了接口或者抽象类中的方法后才可以被实例化。
+不同点：
+1、接口只能定义抽象方法不能实现方法，抽象类既可以定义抽象方法，也可以实现方法。
+2、单继承，多实现。接口可以实现多个，只能继承一个抽象类。
+3、接口强调的是功能，抽象类强调的是所属关系。
+4、接口中的所有成员变量 为public static final， 静态不可修改，当然必须初始化。接口中的所有方法都是public abstract 公开抽象的。而且不能有构造方法。抽象类就比较自由了，和普通的类差不多，可以有抽象方法也可以没有，可以有正常的方法，也可以没有。
+
+CopyOnWriteArraySet
+线程安全的HashSet。CopyOnWriteArraySet和HashSet虽然都继承于共同的父类AbstractSet；但是，HashSet是通过“散列表(HashMap)”实现的，而CopyOnWriteArraySet则是通过“动态数组(CopyOnWriteArrayList)”实现的，并不是散列表。
+和CopyOnWriteArrayList类似，其实CopyOnWriteSet底层包含一个CopyOnWriteList，几乎所有操作都是借助CopyOnWriteList，就像HashSet包含HashMap
+它具有以下特性：
+1. 它最适合于具有以下特征的应用程序：Set 大小通常保持很小，只读操作远多于可变操作，需要在遍历期间防止线程间的冲突。
+2. 它是线程安全的。
+3. 因为通常需要复制整个基础数组，所以可变操作（add()、set() 和 remove() 等等）的开销很大。
+4. 迭代器支持hasNext(), next()等不可变操作，但不支持可变 remove()等 操作。
+5. 使用迭代器进行遍历的速度很快，并且不会与其他线程发生冲突。在构造迭代器时，迭代器依赖于不变的数组快照。
+
+
+static不用修饰顶级类（top level class）。只有内部类可以为static。
+ 静态内部类和非静态内部类之间区别:
+1. 内部静态类不需要有指向外部类的引用。但非静态内部类需要。
+2. 静态类只能访问外部类的静态成员，非静态内部类能够访问外部类的静态和非静态成员。
+3. 非静态内部类不能脱离外部类实体被创建，非静态内部类可以访问外部类的数据和方法，因为他就在外部类里面。
+
+
+当两个并发线程访问同一个对象object中的这个synchronized(this)同步代码块时，一个时间内只能有一个线程得到执行。另一个线程必须等待当前线程执行完这个代码块以后才能执行该代码块。
+然而，当一个线程访问object的一个synchronized(this)同步代码块时，另一个线程仍然可以访问该object中的非synchronized(this)同步代码块。
