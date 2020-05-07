@@ -1,0 +1,71 @@
+navkit实现：
+//获取hmi侧callback方法
+DENALI_EXTERN_API jint JNICALL Java_com_telenav_arp_sdk_jni_AutoSdkNavigationServiceJNI_initService(JNIEnv* env, jobject obj, jobject callbackListener, const jbyteArray sdkInitializationInfo_)
+	
+	jclass clazz = env->GetObjectClass(callbackListener);
+	sAndroidEnvInfo.callbackMethodId = env->GetMethodID(clazz, "autoSdkNavigationStatusCallback", "([B)V");
+	env->GetJavaVM(&(sAndroidEnvInfo.javaVM));
+	sAndroidEnvInfo.callbackObject   = env->NewGlobalRef(callbackListener);//callback函数所在的类
+
+//调用，参数分别为类对象，方法，方法的参数
+static int SdkEventCallbackAndroid(const jbyteArray_& eventData)
+	(*(sAndroidEnvInfo.env)).CallVoidMethod(sAndroidEnvInfo.callbackObject, sAndroidEnvInfo.callbackMethodId, byteArray);
+
+在navkit侧传入刚才的SdkEventCallbackAndroid
+	int ret = DenaliSkdInit(sdkInitializationInfo, SdkEventCallbackAndroid);
+		oAutoSdkPluginContext.ptrSdkEventCallback = ptrSdkEventCallback;
+最终的navkit自己起的callback专用线程里面去调用：
+	static unsigned long __stdcall SdkEventCallbackThreadProc(void*)
+		ptrSdkEventCallback(pJob->data);
+pJob作为callback的参数，在这里填充：
+	extern "C" int PostSdkCallbackEvent(const jbyteArray_& event_data, int nEventId)
+		oAutoSdkPluginContext.vCallbackEventJob.push_back(pJob);
+	
+	
+com\telenav\proto\auto_sdk\AutoSdkCommon.java
+  public  static final class SdkEventData extends
+      com.google.protobuf.GeneratedMessageLite<
+          SdkEventData, SdkEventData.Builder> implements
+      SdkEventDataOrBuilder {
+	  }
+
+=====================================================================
+hmi实现：
+java_sdk\arp-sdk\src\hna\java\com\telenav\arp\sdk\AutoSdkManager.java
+public final class AutoSdkManager {
+	private void initAutoSdkListener() {
+		autoSdkServiceCallback = new AutoSdkServiceCallbackImpl();
+	}
+}
+
+java_sdk\arp-sdk\src\navkit\java\com\telenav\arp\sdk\NavKitInitializationTask.java
+	final int status = AutoSdkNavigationServiceJNI.getInstance().initService(autoSdkServiceCallback, builder.build().toByteArray());
+	
+收事件
+java_sdk\arp-sdk\src\navkit\java\com\telenav\arp\sdk\navigation\AutoSdkServiceCallbackImpl.java
+import com.telenav.proto.auto_sdk.AutoSdkCommon; //导入navkit提供的AutoSDK-android.jar里面的AutoSdkCommon.class
+    @Override
+    public void autoSdkNavigationStatusCallback(final byte[] eventData) {
+        try {
+            final AutoSdkCommon.SdkEventData sdkEventData = AutoSdkCommon.SdkEventData.parseFrom(eventData);
+            final AutoSdkCommon.SdkServiceEventCode eventCode = sdkEventData.getEvent();//eventcode是navkit发的protobuf解析出来的
+                public void run() {
+                    try {
+                        switch (eventCode) {
+                            case EVENT_NAVIGATION_PLAY_VOICE_GUIDANCE: {
+                                if(!NavigationService.isExternalAppStopNavigation){
+                                    AutoSdkServiceNavigation.AudioGuidance audioGuidance = AutoSdkServiceNavigation.AudioGuidance.parseFrom(sdkEventData.getEventData());
+                                    notifyVoiceGuidance(audioGuidance);//audioGuidance也是protobuf解析出来的
+                                }
+                                break;
+                            }
+
+通知voiceguidance事件
+							
+							
+							
+							
+							
+							
+							
+							

@@ -1,0 +1,30 @@
+ReadSpeakerEngine.java-----
+	public class ReadSpeakerEngine extends TTSEngine {
+		public ReadSpeakerEngine(@NonNull String name, @NonNull ExecutorService executorService, @NonNull String configPath) {
+			super(name);
+			this.configPath = configPath;
+			this.executorService = executorService;
+			allEngineInfos = new ArrayList<>();
+		}
+	}
+
+TTSEngineProvider.java-----
+import com.telenav.arp.tts.readspeaker.ReadSpeakerEngine;
+	private TTSEngine.SpeakListener speakListener;
+	
+    public TTSEngine createTTSEngine() {
+        TTSEngine engine;
+        String providerStr = configManager.getString(ConfigDef.KEY_TTS_PROVIDER);
+        TTSProvider provider = TTSProvider.fromString(providerStr);
+		
+        switch (provider) {
+            case READ_SPEAKER:
+                engine = new ReadSpeakerEngine(provider.value, executorService, speechDataPath);
+		}
+		engine.setInitCallback((success, languageSupported) -> {	//设置lambda表达式为callback
+            generalSettingsManager.setIsTtsNotSupported(!languageSupported);
+            engine.setSpeakListener(speakListener);
+        });
+        return engine;
+	}
+		
