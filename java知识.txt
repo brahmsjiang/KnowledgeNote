@@ -70,3 +70,11 @@ static不用修饰顶级类（top level class）。只有内部类可以为stati
 
 当两个并发线程访问同一个对象object中的这个synchronized(this)同步代码块时，一个时间内只能有一个线程得到执行。另一个线程必须等待当前线程执行完这个代码块以后才能执行该代码块。
 然而，当一个线程访问object的一个synchronized(this)同步代码块时，另一个线程仍然可以访问该object中的非synchronized(this)同步代码块。
+
+ArrayBlockingQueue的“亲戚”LinkedBlockingQueue
+在集合框架里，ArrayList和ArrayBlockingQueue一样，内部基于数组来存放元素，而LinkedBlockingQueue则和LinkedList一样，内部基于链表来存放元素。
+put方法来看，它总共做了以下情况的考虑：
+队列已满，阻塞等待。
+队列未满，创建一个node节点放入队列中，如果放完以后队列还有剩余空间，继续唤醒下一个添加线程进行添加。如果放之前队列中没有元素，放完以后要唤醒消费线程进行消费。
+offer仅仅对put方法改动了一点点，当队列没有可用元素的时候，不同于put方法的阻塞等待，offer方法直接方法false。
+

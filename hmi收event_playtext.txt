@@ -1,0 +1,412 @@
+navkit实现：
+//获取hmi侧callback方法
+DENALI_EXTERN_API jint JNICALL Java_com_telenav_arp_sdk_jni_AutoSdkNavigationServiceJNI_initService(JNIEnv* env, jobject obj, jobject callbackListener, const jbyteArray sdkInitializationInfo_)
+	
+	jclass clazz = env->GetObjectClass(callbackListener);
+	sAndroidEnvInfo.callbackMethodId = env->GetMethodID(clazz, "autoSdkNavigationStatusCallback", "([B)V");
+	env->GetJavaVM(&(sAndroidEnvInfo.javaVM));
+	sAndroidEnvInfo.callbackObject   = env->NewGlobalRef(callbackListener);//callback函数所在的类
+
+//调用，参数分别为类对象，方法，方法的参数
+static int SdkEventCallbackAndroid(const jbyteArray_& eventData)
+	(*(sAndroidEnvInfo.env)).CallVoidMethod(sAndroidEnvInfo.callbackObject, sAndroidEnvInfo.callbackMethodId, byteArray);
+
+在navkit侧传入刚才的SdkEventCallbackAndroid
+	int ret = DenaliSkdInit(sdkInitializationInfo, SdkEventCallbackAndroid);
+		oAutoSdkPluginContext.ptrSdkEventCallback = ptrSdkEventCallback;
+最终的navkit自己起的callback专用线程里面去调用：
+	static unsigned long __stdcall SdkEventCallbackThreadProc(void*)
+		ptrSdkEventCallback(pJob->data);
+pJob作为callback的参数，在这里填充：
+	extern "C" int PostSdkCallbackEvent(const jbyteArray_& event_data, int nEventId)
+		oAutoSdkPluginContext.vCallbackEventJob.push_back(pJob);
+	
+	
+com\telenav\proto\auto_sdk\AutoSdkCommon.java
+  public  static final class SdkEventData extends
+      com.google.protobuf.GeneratedMessageLite<
+          SdkEventData, SdkEventData.Builder> implements
+      SdkEventDataOrBuilder {
+	  }
+
+=====================================================================
+javasdk实现：
+java_sdk\arp-sdk\src\hna\java\com\telenav\arp\sdk\AutoSdkManager.java
+public final class AutoSdkManager {
+	private void initAutoSdkListener() {
+		autoSdkServiceCallback = new AutoSdkServiceCallbackImpl();
+	}
+}
+
+java_sdk\arp-sdk\src\navkit\java\com\telenav\arp\sdk\NavKitInitializationTask.java
+	final int status = AutoSdkNavigationServiceJNI.getInstance().initService(autoSdkServiceCallback, builder.build().toByteArray());
+	
+收事件
+java_sdk\arp-sdk\src\navkit\java\com\telenav\arp\sdk\navigation\AutoSdkServiceCallbackImpl.java
+import com.telenav.proto.auto_sdk.AutoSdkCommon; //导入navkit提供的AutoSDK-android.jar里面的AutoSdkCommon.class
+    @Override
+    public void autoSdkNavigationStatusCallback(final byte[] eventData) {
+        try {
+            final AutoSdkCommon.SdkEventData sdkEventData = AutoSdkCommon.SdkEventData.parseFrom(eventData);
+            final AutoSdkCommon.SdkServiceEventCode eventCode = sdkEventData.getEvent();//eventcode是navkit发的protobuf解析出来的
+                public void run() {
+                    try {
+                        switch (eventCode) {
+                            case EVENT_NAVIGATION_PLAY_VOICE_GUIDANCE: {
+                                if(!NavigationService.isExternalAppStopNavigation){
+                                    AutoSdkServiceNavigation.AudioGuidance audioGuidance = AutoSdkServiceNavigation.AudioGuidance.parseFrom(sdkEventData.getEventData());
+                                    notifyVoiceGuidance(audioGuidance);//audioGuidance也是protobuf解析出来的
+                                }
+                                break;
+                            }
+
+通知voiceguidance事件(java文件同上)
+import com.telenav.arp.sdk.vo.navigation.VoiceGuidance;
+
+public class AutoSdkServiceCallbackImpl implements AutoSdkNavigationServiceCallback {
+    private void notifyVoiceGuidance(AutoSdkServiceNavigation.AudioGuidance audioGuidance) {
+        final VoiceGuidance guidance = ProtoBuf2VOHelper.convert(audioGuidance);
+        for (AutoSdkNavigationService.NavigationVoiceGuidanceListener listener
+                : AutoSdkNavigationService.getInstance().getNavigationVoiceGuidanceListeners()) {
+            try {
+                listener.notifyVoiceGuidance(guidance);
+            }
+		}
+	}
+}	
+
+java_sdk\arp-sdk\src\main\java\com\telenav\arp\sdk\navigation\AutoSdkNavigationService.java
+import java.util.concurrent.CopyOnWriteArraySet;
+public abstract class AutoSdkNavigationService implements NavigationService.RefreshStartPoint {
+	private Collection<NavigationVoiceGuidanceListener> navigationVoiceGuidanceListeners = new CopyOnWriteArraySet<>();
+    Collection<NavigationVoiceGuidanceListener> getNavigationVoiceGuidanceListeners() {
+        return this.navigationVoiceGuidanceListeners;	//返回的是整个collection
+    }
+
+java_sdk\arp-sdk\src\navkit\java\com\telenav\arp\sdk\navigation\AutoSdkNavigationServiceNavkitImpl.java
+public final class AutoSdkNavigationServiceNavkitImpl extends AutoSdkNavigationService {
+    public AutoSdkNavigationServiceNavkitImpl() {
+        setImpl(this);
+        this.addMapMatchingLocationListener(AutoSdkNavigationServiceWrapper.INSTANCE);
+        this.addNavigationStatusListener(AutoSdkNavigationServiceWrapper.INSTANCE);
+        this.addNavigationVoiceGuidanceListener(AutoSdkNavigationServiceWrapper.INSTANCE);	//往navigationVoiceGuidanceListeners里面添加listener元素
+    }
+}
+
+java_sdk\arp-sdk\src\navkit\java\com\telenav\arp\sdk\navigation\AutoSdkNavigationServiceWrapper.java	//包装器
+final class AutoSdkNavigationServiceWrapper implements AutoSdkNavigationService.MapMatchingLocationListener,
+        AutoSdkNavigationService.NavigationStatusListener,
+        AutoSdkNavigationService.NavigationVoiceGuidanceListener {
+    final static AutoSdkNavigationServiceWrapper INSTANCE = new AutoSdkNavigationServiceWrapper();	//AutoSdkNavigationServiceWrapper的INSTANCE，是个静态成员
+	
+    @ThreadSafe
+    private static class VoiceGuidanceUtil {
+        private VoiceGuidancePlaybackStrategy voiceGuidancePlaybackStrategy;
+		private TextToSpeechPlayer textToSpeechPlayer;
+	}
+	
+    void installVoiceGuidancePlaybackStrategy(VoiceGuidancePlaybackStrategy strategy, TextToSpeechPlayer player) {	//在hmi侧使用该方法安装XX播放策略
+        synchronized (this.voiceGuidanceUtil) {
+            this.voiceGuidanceUtil.setVoiceGuidancePlaybackStrategy(strategy);	//设置内部工具类VoiceGuidanceUtil的成员strategy和player
+            this.voiceGuidanceUtil.setTextToSpeechPlayer(player);
+        }
+    }
+	
+	@Override
+    public void notifyVoiceGuidance(VoiceGuidance guidance) {	//通知voiceguidance事件最终使用的是这里的函数 notifyVoiceGuidance
+        if (guidance != null) {
+            VoiceGuidancePlaybackStrategy strategy;
+            TextToSpeechPlayer player;
+            synchronized (this.voiceGuidanceUtil) {
+                strategy = this.voiceGuidanceUtil.getVoiceGuidancePlaybackStrategy();	//获取内部类的strategy成员
+                player = this.voiceGuidanceUtil.getTextToSpeechPlayer();	//获取内部类的textToSpeechPlayer成员
+            }
+            if (player != null && strategy != null) {
+				//最终调用，参数一是getTextToSpeechPlayer()返回值
+                strategy.navigationVoiceGuidance(player, guidance, !this.isVoiceGuidanceNotificationEnabled());
+            }
+        }
+    }
+
+}
+							
+进行相关播放事宜：
+java_sdk\arp-sdk\src\main\java\com\telenav\arp\sdk\navigation\VoiceGuidancePlaybackStrategy.java
+public interface VoiceGuidancePlaybackStrategy {
+}
+
+java_sdk\arp-sdk\src\main\java\com\telenav\arp\sdk\navigation\DefaultVoiceGuidancePlaybackStrategy.java
+public class DefaultVoiceGuidancePlaybackStrategy implements VoiceGuidancePlaybackStrategy {
+    @Override
+    public void navigationVoiceGuidance(TextToSpeechPlayer player, VoiceGuidance voiceGuidance, boolean hintMuted) {	//上述最终调用的是该函数！！！！
+        if (this.filterNavigationVoiceGuidance(voiceGuidance, hintMuted)) {
+            final boolean interruptPreviousAudio = (voiceGuidance.getPromptType() == VoiceGuidance.GuidancePromptType.RepeatNavigationGuidance);
+            final Bundle params = new Bundle();
+
+            if (voiceGuidance.getGuidanceTexts() != null) {
+                boolean firstAudio = true;
+                for (final String text : voiceGuidance.getGuidanceTexts()) {
+                    if (firstAudio && interruptPreviousAudio) {
+                        final Bundle paramFirstAudio = new Bundle(params);
+                        paramFirstAudio.putBoolean(TextToSpeechPlayer.INTERRUPT_AUDIO, true);
+                        player.synthesizeText(text, paramFirstAudio);	//调到了这里，合成text
+                        firstAudio = false;
+                    } else {
+                        player.synthesizeText(text, params);
+                    }
+                }
+            }
+        }
+	}
+}
+
+java_sdk\android-common\src\main\java\com\telenav\arp\tts\DenaliVoiceGuidancePlaybackStrategy.java
+public class DenaliVoiceGuidancePlaybackStrategy extends DefaultVoiceGuidancePlaybackStrategy {
+}
+
+javasdk侧的TTSManager：
+public class TTSManager implements TextToSpeechPlayer {
+	private TTSEngine engine;
+
+    public static void init(@NonNull Context context, @NonNull AbstractAudioManager audioManager,
+                            @NonNull Locale locale, @NonNull TTSEngine engine) {
+            instance.audioManager = audioManager;
+            instance.engine = engine;
+            engine.init(context, locale);
+    }
+	
+    private boolean playAudio(@NonNull String ttsString, @NonNull String utteranceId) {
+		return engine.play(ttsString, utteranceId);	//engine播放audio
+    }
+	
+    @Override
+    public boolean synthesizeText(String text, Bundle params) {
+        String utteranceId = null;
+        if (params != null) {
+            final boolean interruptAudio = params.getBoolean(INTERRUPT_AUDIO, false);
+            if (interruptAudio) {
+                engine.interrupt();	//engine中断audio
+            }
+            utteranceId = params.getString(UTTERANCE_ID, "default");
+        }
+        return playAudio(text, utteranceId);	
+    }
+}
+=====================================================================
+hmi实现：
+NavHome\module\mainshared\src\main\java\com\telenav\arp\app\BaseApplication.java
+import com.telenav.arp.tts.TTSManager;
+
+public abstract class BaseApplication extends Application implements Application.ActivityLifecycleCallbacks, AutoSdkListener, ApplicationContextHelper.IAppContext, NewRoutesObserver {
+    protected com.telenav.arp.sdk.tts.TextToSpeechPlayer getTTSPlayer() {
+        return TTSManager.getInstance();
+    }
+	
+    @Override
+    public void notifyNavInitEvent(@AutoSdkInitState int state) {
+		AutoSdkNavigationService.getInstance().installVoiceGuidancePlaybackStrategy(new DenaliVoiceGuidancePlaybackStrategy(), getTTSPlayer());
+	}
+}
+
+
+NavHome\Apps\Arp\HMI\src\main\java\com\telenav\arp\app\MainApplication.java
+public abstract class MainApplication extends BaseApplication implements HasActivityInjector {
+    @Override
+    protected void initTTS() {
+        String ttsDataPath = getTTSDataPath();
+        DisplayManager.getInstance().runOnUiThread(() -> {
+            AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+            boolean isGMHeadUnit = ApplicationContextHelper.getInstance().isGMHeadUnit();
+            VoiceGuidanceCenter.SpeakingCallback speakingCallback = isGMHeadUnit ? new DenaliAudioSpeakingCallback() : new MLAudioSpeakingCallback(audioManager);
+            VoiceGuidanceCenter.getInstance().addSpeakingCallback(speakingCallback);
+
+            Locale locale = getTTSLocale();
+            TTSEngineProvider provider = new TTSEngineProvider(	//上面的engine在这里初始化
+                    ConfigManager.getInstance(),
+                    SharedExecutor.getExecutor(),
+                    GeneralSettingsManager.getInstance(),
+                    VoiceGuidanceCenter.getInstance(),
+                    ttsDataPath
+            );
+            TTSEngine engine = provider.createTTSEngine();
+            TTSManager.init(MainApplication.this, AbstractAudioManager.getInstance(), locale, engine);	//TTSManager初始化
+        });
+    }
+}
+
+NavHome\Apps\Arp\HMI\src\main\java\com\telenav\arp\provider\TTSEngineProvider.java
+public class TTSEngineProvider {
+    public TTSEngine createTTSEngine() {
+        TTSEngine engine;
+        String providerStr = configManager.getString(ConfigDef.KEY_TTS_PROVIDER);
+        TTSProvider provider = TTSProvider.fromString(providerStr);//string转enum
+ 
+        switch (provider) {
+            case READ_SPEAKER:
+                engine = new ReadSpeakerEngine(provider.value, executorService, speechDataPath);	//这里engine比如readspeaker
+                break;
+            default:
+                engine = new SystemTTSEngine(TTSProvider.SYSTEM.value);
+                break;
+        }
+        engine.setInitCallback((success, languageSupported) -> {
+            generalSettingsManager.setIsTtsNotSupported(!languageSupported);
+            engine.setSpeakListener(speakListener);
+        });
+        return engine;
+    }
+}
+
+NavHome\Apps\Arp\tts\src\main\java\com\telenav\arp\tts\readspeaker\ReadSpeakerEngine.java
+public class ReadSpeakerEngine extends TTSEngine {
+	private ReadSpeakerPlayer player;
+
+    @Override
+    public void init(@NonNull Context context, @NonNull Locale locale) {);
+        this.locale = locale;
+        boolean result = false;
+
+        InitFileConfig config = new InitFileConfig(context, configPath);
+        config.config();
+        String initFileDir = config.getInitFileDir();
+
+        core = new VoiceText();
+        core.vtapiSetLicenseForder(configPath);
+        try {
+            core.vtapiInit(initFileDir);
+            allEngineInfos.addAll(core.vtapiGetEngineInfo().values());
+            if (!allEngineInfos.isEmpty()) {
+                logSupportEngineInfos();
+                engineInfo = switchEngineInfo();
+                result = true;
+            }
+            if (engineInfo != null) {
+                player = new ReadSpeakerPlayer(core, executorService, engineInfo);	//ReadSpeakerPlayer初始化
+                player.setListener(speakListenerWrapper);
+                player.init();
+            }
+        }
+        if (initCallback != null) {
+            initCallback.onInit(result, engineInfo != null);
+        }
+    }
+	
+    public void stop() {
+		player.stop();
+    }
+	
+    @Override
+    public boolean play(@NonNull String content, @NonNull String utteranceId) {
+		return player.play(new ReadSpeakerPlayer.Meta(content, utteranceId));
+    }
+}
+
+NavHome\Apps\Arp\tts\src\main\java\com\telenav\arp\tts\readspeaker\ReadSpeakerPlayer.java
+class ReadSpeakerPlayer {
+	private BlockingQueue<Meta> metaList = new LinkedBlockingQueue<>();	//阻塞队列
+	private ReadSpeaker speaker;
+
+	//Meta是内部类
+    static class Meta {
+        Meta(String content, String utteranceId) {
+            this.content = content;
+            this.utteranceId = utteranceId;
+        }
+        private String content;
+        private String utteranceId;
+    }
+	
+    ReadSpeakerPlayer(final VoiceText core, final ExecutorService executorService, final EngineInfo selectedEngine) {
+        this.core = core;
+        this.executorService = executorService;
+        this.selectedEngine = selectedEngine;
+    }
+	
+    void init() {
+        int outputBufferSize = AudioTrack.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT);
+
+		audioTrack = new AudioTrack(AudioManager.USE_DEFAULT_STREAM_TYPE, SAMPLE_RATE,
+				AudioFormat.CHANNEL_OUT_MONO,AudioFormat.ENCODING_PCM_16BIT,
+				outputBufferSize, AudioTrack.MODE_STREAM);
+
+        playFeature = executorService.submit(() -> {
+			while (!released) {
+				Meta meta = metaList.take();	//消费者？？是不是两个线程之间通信？
+				playMeta(meta);
+			}
+        });
+    }
+	
+    private void playMeta(Meta meta) {
+        speaker = new ReadSpeaker(core, audioTrack, selectedEngine, listener, meta.content, meta.utteranceId);
+        speaker.start();
+    }
+	
+    boolean play(@NonNull Meta meta) {	//调用到Player的play
+        return metaList.offer(meta);	//生产者，放到了阻塞队列里面
+    }
+
+    void stop() {	//调用到Player的stop
+        if (speaker != null) {
+            speaker.stop();
+        }
+    }
+}
+
+NavHome\Apps\Arp\tts\src\main\java\com\telenav\arp\tts\readspeaker\ReadSpeaker.java
+import android.media.AudioTrack;
+import kr.co.voiceware.java.vtapi.VoiceText;	//第三方库
+
+class ReadSpeaker {
+	private VoiceText core;	//VoiceText类非常重要
+	private AudioTrack audioTrack;
+    private String content;	//使用meta.content初始化
+    private String utteranceId;	//使用meta.utteranceId初始化
+	private TTSEngine.SpeakListener listener;	//listener也很重要
+	
+    public synchronized void stop() {
+        if (!isStopped) {
+            isStop = true;
+            audioTrack.stop();
+            core.vtapiStopBuffer();
+        }
+    }
+	
+    public void start() {
+        if (listener != null && !isStarted) {
+            listener.onStart(utteranceId);
+            isStarted = true;
+        }
+
+        audioTrack.play();
+
+
+		Options options = new Options();
+		options.setPitch(100);
+		options.setSpeed(100);
+		core.vtapiTextToBuffer(content, false, false, 0,
+				engineInfo.getSpeaker(), engineInfo.getSampling(), engineInfo.getType(),
+				options, Constants.OutputFormat.FORMAT_16PCM, voiceTextListener);
+
+
+        waitAudioTrackStop();
+
+        audioTrack.stop();
+        audioTrack.flush();
+
+        if (listener != null) {
+            if (isError && !isErrored) {
+                isErrored = true;
+                listener.onError(utteranceId);
+            } else if (isStop && !isStopped) {
+                isStopped = true;
+                listener.onStop(utteranceId, isInterrupt);
+            } else if (!isDone) {
+                isDone = true;
+                listener.onDone(utteranceId);
+            }
+        }
+    }
+}
+

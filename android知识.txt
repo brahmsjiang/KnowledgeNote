@@ -1,0 +1,11 @@
+import android.os.Bundle;
+Android中Bundle类用作携带数据，它类似于Map，用于存放key-value名值对形式的值。
+Bundle类是一个final类，两个activity之间的通讯可以通过bundle类来实现：
+
+final Bundle params = new Bundle();
+final Bundle paramFirstAudio = new Bundle(params);
+paramFirstAudio.putBoolean(TextToSpeechPlayer.INTERRUPT_AUDIO, true);
+player.synthesizeText(text, paramFirstAudio);
+
+import android.media.AudioTrack;
+相比MediaPlayer，AudioTrack更为精练、高效，实际上MediaPlayerService的内部实现就是使用了AudioTrack。
