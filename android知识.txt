@@ -9,3 +9,13 @@ player.synthesizeText(text, paramFirstAudio);
 
 import android.media.AudioTrack;
 相比MediaPlayer，AudioTrack更为精练、高效，实际上MediaPlayerService的内部实现就是使用了AudioTrack。
+
+Android的权限在AndroidManifest.xml文件里配置。AndroidManifest文件中有四个标签与permission有关，它们分别是 <permission>、 <permission-group> 、<permission-tree> 和 <uses-permission>。其中最常用的是 <uses-permission>，当我们需要获取某个权限的时候就必须在我们的manifest文件中声明<uses-permission>。
+<permission>和 <uses-permission>的作用相似，两者之间的不同之处，<uses-permission>是android预定义的权限，<permission>是自己定义的权限。
+
+
+import android.content.Context;
+Context意思上下文，其实该类为LONG型，类似Win32中的Handle句柄，很多方法需要通过Context才能识别调用者的实例。
+比如Toast的第一个参数就是Context。一般在Activity中我们直接用this代替，代表调用者的实例为Activity，而到了一个button的onClick(View view)等方法时，用this时就会报错，所以可能使用ActivityName.this来解决，原因是实现Context的类主要有Android特有的几个模型，Activity、Service以及BroadcastReceiver。
+通常需要Context实例的方法主要有各种Service实现的类，比如获取内部存储的路径: context.getFilesDir()
+路径是:/data/data/<package name>/files/…

@@ -1,0 +1,48 @@
+VTAPI是ReadSpeaker引擎的一套api，使用这套统一api就能使用多种语言，不用切换。
+VTAPI包含android API和原生native API和native API。使用sdk前，需要指定verification.txt或license key以及TTS_DB文件用于加载TTS引擎。这是使用API的前提
+
+android API：
+vtapi4a.jar在android sdk使用
+vtlicensemodule.jar当license key可用时用以下载license
+
+使用方法====》
+在gradle引入依赖jar包： 
+implementation files('thirdparty/libs/vtapi4a.jar')
+
+导入相关package
+import kr.co.voiceware.java.vtapi.Constants;	//一些常量
+import kr.co.voiceware.java.vtapi.EngineInfo;	//含speaker、采样率、type等信息
+import kr.co.voiceware.java.vtapi.Options;		//选项设置Pitch（音高）、speed等
+import kr.co.voiceware.java.vtapi.VoiceText;
+import kr.co.voiceware.java.vtapi.VoiceTextListener;	//listener类，用户重写该类onReadBuffer等方法，是个回调
+import java.util.concurrent.ExecutorService;
+
+新建对象
+VoiceText core = new VoiceText();
+List<EngineInfo> allEngineInfos = new ArrayList<>();
+
+认证license & 加载DB
+core.vtapiSetLicenseForder(configPath);	//configPath为证书存放路径， 这里使用项目附带的verification.txt
+core.vtapiInit(initFileDir);	//initFileDir是自行制定的ttsdata dir，其中含有合成需要的DB文件（alpine定为mapdata）
+
+获取所支持engineinfo，供所支持语言匹配。
+allEngineInfos.addAll(core.vtapiGetEngineInfo().values());	//结果是个map，这里取val。
+
+输出至PCM帧缓冲
+player = new ReadSpeakerPlayer(core, executorService, engineInfo);
+    public void start() {
+		core.vtapiTextToBuffer(content, false, false, 0,
+				engineInfo.getSpeaker(),
+				engineInfo.getSampling(),
+				engineInfo.getType(),
+				options,
+				Constants.OutputFormat.FORMAT_16PCM,
+				voiceTextListener);
+	}
+
+卸载合成器DB
+public class ReadSpeakerEngine extends TTSEngine {
+    public void release() {
+		core.vtapiExit();
+		core = null;
+    }
