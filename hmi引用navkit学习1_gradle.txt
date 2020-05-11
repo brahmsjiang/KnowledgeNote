@@ -1,3 +1,29 @@
+Jenkins服务器读取.jenkins：
+node('linuxbuild_arp') {
+	stage('Build') {startBuild(buildType, versionName)}
+	stage('UnitTest') {...}
+}
+def startBuild(String buildType, String buildNumber) {
+	sh """bash build.sh ${buildType} ${buildNumber} ${JAVA_HOME} ${NEXUS_USERNAME} ${NEXUS_PASSWORD}"""
+}
+
+调用build.sh脚本：
+chmod +x ./gradlew
+if [ $1 == "NI" ] || [ $1 == "RC" ];then
+./gradlew :arp-sdk:assembleTasdkDebugAndroidTest updateLibVersion publishRelease -PbuildType=release -PversionName=$2 --info -Dorg.gradle.java.home=$3 -PnexusUsername=$4 -PnexusPassword=$5
+
+执行gradlew（gradlwrapper也是个用以向后兼容gradle的工具，下载最新gradle版本方便使用），它是Androidstudio构建工程时自动创建的。
+其实也是个shell脚本：
+APP_HOME="`pwd -P`"
+CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
+
+exec "$JAVACMD" "${JVM_OPTS[@]}" -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"
+#exec java -Xdock:name=Gradle -Xdock:icon=/Users/pro/media/gradle.icns -Dorg.gradle.appname=gradlew -classpath /Users/pro/gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain build
+#gradle wrapper的跨平台是通过在核心的jar上外包一层脚本，最终其实也就是调用java 应用路径/gradle/wrapper/gradle-wrapper.jar，并指定了main为org.gradle.wrapper.GradleWrapperMain，因为java支持多个main。
+ + 传给 ./gradlew的其他参数
+
+gradle-wrapper.jar就是gradle（java书写）构建工具本身。主要是下载gradle，和运行gradle命令。通过编写一个名为build.gradle的脚本文件对项目进行设置，再根据这个脚本对项目进行构建（复杂的项目也有其他文件）
+
 项目中一般会出现2个/多个build.gradle 文件，一个在根目录下，一个在app 目录下。
  根目录下的 build.gradle
 　　1） repositories 闭包，声明了 jcenter() 的配置；
