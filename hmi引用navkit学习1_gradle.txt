@@ -32,6 +32,16 @@ gradle-wrapper.jar就是gradle（java书写）构建工具本身。主要是下�
  
 利用apply from: 'xx.gradle'这样的语句，就可以引入其他gradle文件了
 
+----------------
+Configurations
+在Gradle中，依赖都被会分配到某一个具体的configuration中（获取翻译成布局、分组更适合）。Configuration代表着一个或多个构件及构件所需依赖的一个分组。
+configurations {
+    provided
+}
+
+maven中值为provided的scope，可以让我们声明一个只在编译时使用的非传递性的依赖。在gradle中provided，是提供给那些只编译不打包场景的命令。
+
+
 可以在ext属性的map中放字符串或者基本数据类型
 java-sdk-common\java_sdk\dependencies_warehouse.gradle
 ext.versions = [
@@ -40,7 +50,8 @@ ext.versions = [
 ]
 		
 ext.libraries = [
-        navKit: "telenav:NavKit:${versions.navKit}",  //结果 telenav:NavKit:2.94.625345
+        navKit: "telenav:NavKit:${versions.navKit}",  //即为 telenav:NavKit:2.94.625345
+		navkitScoutFoundation  : "telenav:ScoutFoundation:$versions.navkitScoutFoundation", //即为 telenav:ScoutFoundation:1.7.11
 		...
 ]
 
