@@ -2,10 +2,9 @@
 Jenkins服务器读取.jenkins：
 node('linuxbuild_arp') {
 	stage('Build') {startBuild(buildType, versionName)}
-	stage('UnitTest') {...}
 }
 def startBuild(String buildType, String buildNumber) {
-	sh """bash build.sh ${buildType} ${buildNumber} ${JAVA_HOME} ${NEXUS_USERNAME} ${NEXUS_PASSWORD}"""
+	sh """bash build.sh ${buildType} ${buildNumber} ${JAVA_HOME}..."""
 }
 
 调用build.sh脚本：
@@ -93,7 +92,8 @@ allprojects {
 java-sdk-common\java_sdk\androidCommon.gradle
 flavor旨在创建不同的产品风味(app或者仅仅是个lib 包都可以)，并为不同产品分配专有属性
 flavor在配置不同产品时，productFlavors 设置的不同环境包名会覆盖 defaultConfig 里面的设置的包名。
-flavorDimensions "SDK" //用flavorDimensions属性来创建一个“模式”风味维度，维度来区分不同的类型，比如这里是“SDK”，还有“dev”“app”等
+ //用flavorDimensions属性来创建一个“模式”风味维度，维度来区分不同的类型，比如这里是“SDK”，还有“dev”“app”等
+flavorDimensions "SDK"
 productFlavors {
 	navkit {
 		dimension "SDK"
