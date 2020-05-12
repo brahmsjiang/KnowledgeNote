@@ -1,3 +1,4 @@
+
 Jenkins服务器读取.jenkins：
 node('linuxbuild_arp') {
 	stage('Build') {startBuild(buildType, versionName)}
@@ -28,22 +29,43 @@ gradle-wrapper.jar就是gradle（java书写）构建工具本身。主要是下�
  根目录下的 build.gradle
 　　1） repositories 闭包，声明了 jcenter() 的配置；
 　　2） dependencies 闭包，声明了一个 Gradle 插件。
-
- 
 利用apply from: 'xx.gradle'这样的语句，就可以引入其他gradle文件了
 
-----------------
-Configurations
-在Gradle中，依赖都被会分配到某一个具体的configuration中（获取翻译成布局、分组更适合）。Configuration代表着一个或多个构件及构件所需依赖的一个分组。
+------------------arp-foundation子目录
+configuration是一系列dependencies的命名分组，该闭包可有可无。repository是dependencies的来源。Dependencies被声明为一组属性来使用。这样Gradle就能依靠dependencies所声明属性在repository中找到相应的依赖，下载并缓存在本地的某个路径。
+dependencies的内容都被会分配到某一个具体的configuration中。Configuration代表着一个或多个构件及构件所需依赖的一个分组。
+maven中值为provided的scope，可以让我们声明一个只在编译时使用的非传递性的依赖。gradle中provided与之类似，是提供给那些只编译不打包场景的命令。
+java-sdk-common\java_sdk\arp-foundation\dependencies.gradle
 configurations {
-    provided
+    provided	//这里指dependencies下列出的依赖都是只参与编译且不打包的
 }
 
-maven中值为provided的scope，可以让我们声明一个只在编译时使用的非传递性的依赖。在gradle中provided，是提供给那些只编译不打包场景的命令。
+dependencies {
+    navkitProvided("${libraries.navkitScoutFoundation}") { //即为 telenav:ScoutFoundation:1.7.11，  所需下载相应的依赖文件的版本，将这个依赖命名为“navkitProvided”
+        transitive = false
+    }
+    navkitProvided("${libraries.userService}") {
+        transitive = false
+    }
+}
 
+依赖仓库（远程）	
+//实际url： http://tar1.telenav.com:8080/repository/telenav/client/trunk/NavKit/NavKit-android-ndk-r15c-2.94.625345-trunk.zip
+repositories {
+    ivy {
+        artifactPattern "${telenavRepository}/[organisation]/client/trunk/[module]/[module]-android-[revision]-trunk.[ext]"
+    }
+}
 
-可以在ext属性的map中放字符串或者基本数据类型
+java-sdk-common\java_sdk\arp-foundation\build.gradle
+apply from: 'dependencies.gradle'
+
+------------------主目录
+java-sdk-common\java_sdk\gradle.properties	
+telenavRepository=http://tar1.telenav.com/repository	//全局性配置，主目录的build.gradle和arp-foundation\build.gradle都能使用
+
 java-sdk-common\java_sdk\dependencies_warehouse.gradle
+可以在ext属性的map中放字符串或者基本数据类型
 ext.versions = [
         navKit: '2.94.625345',
 		...
@@ -57,11 +79,18 @@ ext.libraries = [
 
 java-sdk-common\java_sdk\build.gradle
 apply from: 'dependencies_warehouse.gradle'
+allprojects是对所有project的配置，包括Root Project。而subprojects是对所有Child Project的配置。
+allprojects {
+    repositories {
+        jcenter()
+        ivy {
+            artifactPattern "${telenavRepository}/[organisation]/client/trunk/[module]/[module]-android-ndk-r15c-[revision]-trunk.[ext]"
+            artifactPattern "${telenavRepository}/[organisation]/client/trunk/[module]/[module]-android-[revision]-trunk.[ext]"
+        }
+    }
+}
 
-java-sdk-common\java_sdk\arp-sdk
-apply from: 'tn_dependencies.gradle'
-
---------------------
+java-sdk-common\java_sdk\androidCommon.gradle
 flavor旨在创建不同的产品风味(app或者仅仅是个lib 包都可以)，并为不同产品分配专有属性
 flavor在配置不同产品时，productFlavors 设置的不同环境包名会覆盖 defaultConfig 里面的设置的包名。
 flavorDimensions "SDK" //用flavorDimensions属性来创建一个“模式”风味维度，维度来区分不同的类型，比如这里是“SDK”，还有“dev”“app”等
@@ -72,7 +101,7 @@ productFlavors {
 }
 
 此外，还可以设置不同的产品引入不同的包
-使用方式：产品名Compile “xxx.xxx.xx”
+使用方式：产品名Compile “xxx.xxx.xx”	//如下面的“navkitCompile”
 dependencies对于Android开发人员来说，并不陌生， 它是用来配置当项目的依赖项，接收的是一个DependencyHandler的闭包。
 
 其中使用闭包XXXcompile
@@ -84,19 +113,59 @@ dependencies对于Android开发人员来说，并不陌生， 它是用来配置
 implementation 是Gradle4.1(Android studio3.0)新增的依赖方式，implementation和compile不同，该依赖方式不会产生传递依赖，implementation有点像provided和、debugCompile和releaseCompile的集合体。
 来个具体场景，例如：有libA公共库，libB通过implementation依赖libB，然后app无论通过什么方式依赖libB，lib1的依赖都不会传递过来，必须要在app中重新依赖一次。
 
+------------------arp-sdk子目录
+java-sdk-common\java_sdk\arp-sdk\build.gradle
+apply from: '../dependencies_warehouse.gradle'	//引用主目录的dependencies_warehouse，其实就定义了各种仓库需要的变量而已
+apply from: '../androidCommon.gradle'	
+apply from: 'tn_dependencies.gradle'	//！！！arp-sdk目录的dependencies、配合主目录下allprojects的repositories，完成对navkit lib的下载和缓存
+apply from: 'project.gradle'
+
+
 java-sdk-common\java_sdk\arp-sdk\tn_dependencies.gradle：
-navkitCompile fileTree(include: ['*.jar', '*.aar'], dir: 'navkitLibs') //将libs目录下所有jar文件进行编译并打包
+dependencies {		
+	navkitCompile fileTree(include: ['*.jar', '*.aar'], dir: 'navkitLibs') //将libs目录下所有jar文件进行编译并打包
 
-navkitCompile(libraries.hybridSearch) {
-	exclude(group: 'com.github.davidmoten', module: 'geo') //导入第三方库时，如该库本身也导入了和我们主工程一样的库，就会报错，因此要排除重复的库
-}
-		
-navkitCompile(libraries.navKit) {
-	transitive = false
+	navkitCompile(libraries.hybridSearch) {
+		exclude(group: 'com.github.davidmoten', module: 'geo') //导入第三方库时，如该库本身也导入了和我们主工程一样的库，就会报错，因此要排除重复的库
+	}
+			
+	navkitCompile(libraries.navKit) {
+		transitive = false
+	}
+
+	navkitCompile(libraries.mapEngine) {
+		transitive = false//Transitive用于自动处理子依赖项。默认为true，gradle自动添加子依赖项，形成一个多层树形结构；设置为false，则需要手动添加每个依赖项。
+	}
 }
 
-navkitCompile(libraries.mapEngine) {
-	transitive = false//Transitive用于自动处理子依赖项。默认为true，gradle自动添加子依赖项，形成一个多层树形结构；设置为false，则需要手动添加每个依赖项。
+java-sdk-common\java_sdk\arp-sdk\project.gradle
+gradle中所有的构建工作都是由task完成的,它帮我们处理了很多工作,比如编译,打包,发布等都是task.
+task getLibs {	//解压并拷贝到指定目录
+    configurations.navkitCompile.asFileTree.each { File file ->
+        if (file.getName().matches(".*\\.zip")) {
+            copy {
+                from zipTree(file)
+                into property_unzippedDir
+                includeEmptyDirs = false
+                include '**/*.so'
+                include '**/*.jar'
+                include '**/AutoSDK-resources.zip'
+                include '**/android-ndk-r15c/resources/RenderEngine/shaders/**'
+                include '**/android-ndk-r15c/resources/RenderEngine/textures/**'
+            }
+        }
+    }
+}
+
+task copyJars() {	//复制文件到指定目录
+    def jarLibFolder = 'navkitLibs/'
+    def tree = fileTree(dir: property_unzippedDir, include: '**/*.jar')
+    tree.each { File file ->
+        copy {
+            from file
+            into jarLibFolder
+        }
+    } 
 }
 
 Gradle Plugin的作用：
