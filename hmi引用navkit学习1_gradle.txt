@@ -138,9 +138,9 @@ dependencies {
 	}
 }
 
-java-sdk-common\java_sdk\arp-sdk\project.gradle
-gradle中所有的构建工作都是由task完成的,它帮我们处理了很多工作,比如编译,打包,发布等都是task.
-task getLibs {	//解压并拷贝到指定目录
+java-sdk-common\java_sdk\arp-sdk\project.gradle所以构建工作都是由task完成的,task包含编译,打包,发布等。
+//解压并拷贝到指定目录：
+task getLibs {
     configurations.navkitCompile.asFileTree.each { File file ->
         if (file.getName().matches(".*\\.zip")) {
             copy {
@@ -156,8 +156,8 @@ task getLibs {	//解压并拷贝到指定目录
         }
     }
 }
-
-task copyJars() {	//复制文件到指定目录
+//复制文件到指定目录
+task copyJars() {
     def jarLibFolder = 'navkitLibs/'
     def tree = fileTree(dir: property_unzippedDir, include: '**/*.jar')
     tree.each { File file ->

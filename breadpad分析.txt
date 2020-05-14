@@ -1,0 +1,22 @@
+breakpad原理：
+
+DENALI_EXTERN_API int JNICALL Java_com_telenav_arp_sdk_jni_AutoSdkNavigationServiceinitService(SdkUserApplet* sdkUserApplet, const jbyteArray& sdkInitializationInfo)
+	extern "C" int DenaliSkdInit(const jbyteArray_& sdkInitializationInfo, fptrSdkEventCallback ptrSdkEventCallback
+                             ,TvNavmapPluginCore *pNavmapPluginCore/* = NULL*/)
+							 
+		if (oSdkInitializationInfo.has_sdk_diagnostic_path())	//来自hmi
+			strDiagnosticDataPath = oSdkInitializationInfo.sdk_diagnostic_path();
+		
+		if (oSdkInitializationInfo.enable_breakpad())
+		
+##AndroidAssert.cpp
+#include "client/linux/handler/exception_handler.h"
+#include "client/linux/handler/minidump_descriptor.h"
+
+			void setUpBreakpad(const std::string& strPath)
+				//设置描述符
+				google_breakpad::MinidumpDescriptor descriptor(ptrBreakpadPath);
+				//设置ExceptionHandler
+				static google_breakpad::ExceptionHandler eh(descriptor, NULL, DumpCallback, NULL, true, -1);
+				
+				
